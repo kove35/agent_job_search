@@ -15,11 +15,12 @@ Compétences en supervision, diagnostic, tests, suivi d'indicateurs, ERP, Excel,
 offer_data = {
     "title": "Technicien de Production Électronique",
     "description": "Supervision, tests, diagnostic, environnement microélectronique, ESD, ERP.",
-    "location": "Rennes"
+    "location": "Rennes",
+    "company": "Entreprise Test"
 }
 
 # ---------------------------------------------------------
-# Fonctions utilitaires
+# Fonction utilitaire pour afficher joliment le JSON
 # ---------------------------------------------------------
 
 def pretty(data):
@@ -27,51 +28,81 @@ def pretty(data):
 
 
 # ---------------------------------------------------------
-# Tests
+# TEST : analyse d'offre
 # ---------------------------------------------------------
 
 def test_analyze_offer():
-    print("\n=== TEST /analyze ===")
-    r = requests.post(f"{BASE_URL}/analyze", json=offer_data)
-    pretty(r.json())
-    return r.json()["analysis"]
+    print("\n=== TEST /analyze/offer ===")
+    r = requests.post(f"{BASE_URL}/analyze/offer", json=offer_data)
+    data = r.json()
+    pretty(data)
+    return data
+
+
+# ---------------------------------------------------------
+# TEST : analyse de CV
+# ---------------------------------------------------------
 
 def test_analyze_cv():
-    print("\n=== TEST /analyze_cv ===")
-    r = requests.post(f"{BASE_URL}/analyze_cv", json={"text": cv_text})
-    pretty(r.json())
-    return r.json()["analysis"]
+    print("\n=== TEST /analyze/cv ===")
+    r = requests.post(f"{BASE_URL}/analyze/cv", json={"text": cv_text})
+    data = r.json()
+    pretty(data)
+    return data
+
+
+# ---------------------------------------------------------
+# TEST : matching CV / offre
+# ---------------------------------------------------------
 
 def test_match(cv_analysis, offer_analysis):
-    print("\n=== TEST /match ===")
+    print("\n=== TEST /analyze/match ===")
     payload = {
-        "cv": json.loads(cv_analysis),
-        "offer": json.loads(offer_analysis)
+        "cv": cv_analysis,
+        "offer": offer_analysis
     }
-    r = requests.post(f"{BASE_URL}/match", json=payload)
-    pretty(r.json())
-    return r.json()["match"]
+    r = requests.post(f"{BASE_URL}/analyze/match", json=payload)
+    data = r.json()
+    pretty(data)
+    return data
+
+
+# ---------------------------------------------------------
+# TEST : optimisation du CV
+# ---------------------------------------------------------
 
 def test_optimize_cv(cv_analysis, offer_analysis, match_result):
     print("\n=== TEST /optimize_cv ===")
     payload = {
-        "cv": json.loads(cv_analysis),
-        "offer": json.loads(offer_analysis),
-        "match": json.loads(match_result)
+        "cv": cv_analysis,
+        "offer": offer_analysis,
+        "match": match_result
     }
     r = requests.post(f"{BASE_URL}/optimize_cv", json=payload)
-    pretty(r.json())
-    return r.json()["optimized_cv"]
+    data = r.json()
+    pretty(data)
+    return data
+
+
+# ---------------------------------------------------------
+# TEST : scoring
+# ---------------------------------------------------------
 
 def test_score(cv_analysis, offer_analysis):
     print("\n=== TEST /score ===")
     payload = {
-        "cv": json.loads(cv_analysis),
-        "offer": json.loads(offer_analysis)
+        "cv": cv_analysis,
+        "offer": offer_analysis
     }
     r = requests.post(f"{BASE_URL}/score", json=payload)
-    pretty(r.json())
-    return r.json()["score"]
+    data = r.json()
+    pretty(data)
+    return data
+
+
+# ---------------------------------------------------------
+# TEST : pipeline complet auto_apply
+# ---------------------------------------------------------
 
 def test_auto_apply():
     print("\n=== TEST /auto_apply ===")
@@ -80,13 +111,9 @@ def test_auto_apply():
         "offer": offer_data
     }
     r = requests.post(f"{BASE_URL}/auto_apply", json=payload)
-    pretty(r.json())
-    return r.json()["auto_apply"]
-
-def test_job_suggestions():
-    print("\n=== TEST /job_suggestions ===")
-    r = requests.get(f"{BASE_URL}/job_suggestions")
-    pretty(r.json())
+    data = r.json()
+    pretty(data)
+    return data
 
 
 # ---------------------------------------------------------
@@ -104,7 +131,5 @@ if __name__ == "__main__":
     score = test_score(cv_analysis, offer_analysis)
 
     auto_apply = test_auto_apply()
-
-    test_job_suggestions()
 
     print("\n✅ Tests terminés.")

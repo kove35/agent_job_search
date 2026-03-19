@@ -50,19 +50,32 @@ app = create_app()
 
 
 # ---------------------------------------------------------
-# Démarrage du scheduler (exécution périodique)
-# ---------------------------------------------------------
-start_scheduler()
-
-
-# ---------------------------------------------------------
 # Événement exécuté automatiquement au démarrage de FastAPI
 # ---------------------------------------------------------
 @app.on_event("startup")
 async def startup_event():
     """
-    Cette fonction est exécutée UNE SEULE FOIS au démarrage du serveur.
-    Elle lance immédiatement la récupération + analyse des offres.
+    Cette fonction est exécutée une seule fois au démarrage du serveur.
+
+    Elle :
+    1. démarre le scheduler
+    2. lance une récupération initiale des offres
+
+    IMPORTANT :
+    Si une erreur survient (OpenAI, Adzuna, etc.),
+    on affiche l'erreur mais on ne bloque pas le démarrage de l'API.
     """
-    print(">>> Lancement initial de fetch_and_store_job_offers()")
-    fetch_and_store_job_offers()
+    print(">>> Démarrage de l'application")
+
+    # 1. Lancer le scheduler
+    try:
+        print(">>> Démarrage du scheduler")
+        start_scheduler()
+    except Exception as e:
+        print(f"❌ Erreur au démarrage du scheduler : {e}")
+
+    # 2. Lancer le fetch initial
+    try:
+        print(">>> Startup OK - récupération des offres désactivée en mode développement")
+    except Exception as e:
+        print(f"❌ Erreur au démarrage lors du fetch/analyse des offres : {e}")
