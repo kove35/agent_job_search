@@ -4,21 +4,25 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+
 # ---------------------------------------------------------
 # Import FastAPI et les routes
 # ---------------------------------------------------------
 from fastapi import FastAPI
-from app.routers import profile, analyze, jobs
+from app.routers import profile, analyze, jobs, applications  # 🔥 ajout applications
+
 
 # ---------------------------------------------------------
 # Import du scheduler (tâches automatiques)
 # ---------------------------------------------------------
 from app.scheduler import start_scheduler
 
+
 # ---------------------------------------------------------
-# Import de la fonction de récupération des offres
+# Import DATABASE (SQLite)
 # ---------------------------------------------------------
-from app.services.job_search import fetch_and_store_job_offers
+from app.db.database import engine
+from app.db.models import Base
 
 
 # ---------------------------------------------------------
@@ -26,19 +30,28 @@ from app.services.job_search import fetch_and_store_job_offers
 # ---------------------------------------------------------
 def create_app():
     """
-    Initialise et configure l'application FastAPI.
-    - Ajoute les routes
-    - Définit le titre et la version
+    Initialise l'application FastAPI :
+    - routes
+    - base de données
     """
+
     app = FastAPI(
         title="Agent IA Recherche d'Emploi",
-        version="0.1.0"
+        version="0.2.0"
     )
 
+    # -----------------------------------------------------
+    # 🔥 Création des tables SQLite au démarrage
+    # -----------------------------------------------------
+    Base.metadata.create_all(bind=engine)
+
+    # -----------------------------------------------------
     # Ajout des routes API
+    # -----------------------------------------------------
     app.include_router(profile.router)
     app.include_router(analyze.router)
     app.include_router(jobs.router)
+    app.include_router(applications.router)  # 🔥 nouvelle route
 
     return app
 
@@ -50,32 +63,26 @@ app = create_app()
 
 
 # ---------------------------------------------------------
-# Événement exécuté automatiquement au démarrage de FastAPI
+# Événement exécuté au démarrage
 # ---------------------------------------------------------
 @app.on_event("startup")
 async def startup_event():
-    """
-    Cette fonction est exécutée une seule fois au démarrage du serveur.
 
-    Elle :
-    1. démarre le scheduler
-    2. lance une récupération initiale des offres
-
-    IMPORTANT :
-    Si une erreur survient (OpenAI, Adzuna, etc.),
-    on affiche l'erreur mais on ne bloque pas le démarrage de l'API.
-    """
     print(">>> Démarrage de l'application")
 
-    # 1. Lancer le scheduler
+    # -----------------------------------------------------
+    # 1. Scheduler
+    # -----------------------------------------------------
     try:
         print(">>> Démarrage du scheduler")
         start_scheduler()
     except Exception as e:
-        print(f"❌ Erreur au démarrage du scheduler : {e}")
+        print(f"❌ Erreur scheduler : {e}")
 
-    # 2. Lancer le fetch initial
+    # -----------------------------------------------------
+    # 2. Info (fetch désactivé)
+    # -----------------------------------------------------
     try:
-        print(">>> Startup OK - récupération des offres désactivée en mode développement")
+        print(">>> Startup OK - mode dev")
     except Exception as e:
-        print(f"❌ Erreur au démarrage lors du fetch/analyse des offres : {e}")
+        print(f"❌ Erreur startup : {e}")
