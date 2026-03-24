@@ -1,41 +1,84 @@
-from datetime import datetime
+from openai import OpenAI
+import os
 
-from app.services.ai_generator import generate_cover_letter
-from app.services.cv_adapter import adapt_cv
-from app.services.decision_engine import decide
-from app.services.storage import save_application
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
-def build_application(job: dict, cv_text: str):
-    """
-    Orchestre tout le processus
-    """
+def build_application(job, cv_text):
 
-    # 1️⃣ score
-    score = job.get("matching_score", 0)
+    try:
+        job = job or {}
+        cv = cv_text or ""
 
-    # 2️⃣ décision
-    decision = decide(score)
+        title = job.get("title", "poste")
+        company = job.get("company", "entreprise")
+        description = job.get("description", "")
 
-    # 3️⃣ adapter CV
-    tailored_cv = adapt_cv(cv_text, job)
+        # =========================
+        # PROMPTS
+        # =========================
+        cv_prompt = f"""
+Crée un CV professionnel pour :
 
-    # 4️⃣ lettre
-    cover_letter = generate_cover_letter(job, cv_text)
+POSTE : {title}
+ENTREPRISE : {company}
 
-    # 5️⃣ résultat
-    result = {
-        "job_id": job["id"],
-        "title": job["title"],
-        "company": job["company"],
-        "decision": decision,
-        "score": score,
-        "cover_letter": cover_letter,
-        "tailored_cv": tailored_cv,
-        "created_at": datetime.utcnow()
-    }
+DESCRIPTION :
+{description}
 
-    # 6️⃣ sauvegarde
-    save_application(result)
+PROFIL :
+{cv}
+"""
 
-    return result
+        letter_prompt = f"""
+Rédige une lettre de motivation.
+
+POSTE : {title}
+ENTREPRISE : {company}
+
+DESCRIPTION :
+{description}
+
+PROFIL :
+{cv}
+"""
+
+        # =========================
+        # CALL CV
+        # =========================
+        try:
+            cv_response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": cv_prompt}],
+                temperature=0.7
+            )
+            generated_cv = cv_response.choices[0].message.content
+        except Exception as e:
+            print(f"❌ CV error: {e}")
+            generated_cv = cv  # fallback
+
+        # =========================
+        # CALL LETTER
+        # =========================
+        try:
+            letter_response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": letter_prompt}],
+                temperature=0.7
+            )
+            cover_letter = letter_response.choices[0].message.content
+        except Exception as e:
+            print(f"❌ Letter error: {e}")
+            cover_letter = "Lettre non générée"
+
+        return {
+            "cv": generated_cv,
+            "cover_letter": cover_letter
+        }
+
+    except Exception as e:
+        return {
+            "cv": "",
+            "cover_letter": "",
+            "error": str(e)
+        }

@@ -1,102 +1,107 @@
+# =========================================================
+# 📦 APPLICATION STORAGE (DATABASE LAYER)
+# =========================================================
+# 🧱 RÔLE ARCHITECTURE :
+# ---------------------
+# Ce module gère UNIQUEMENT l'accès à la base de données
+# pour les candidatures.
+#
+# 👉 Responsabilités :
+# - sauvegarder une candidature
+# - lire les candidatures
+#
+# ❌ Ne fait PAS :
+# - logique métier IA
+# - génération de CV
+# - API
+#
+# 👉 Pattern utilisé :
+# DATA ACCESS LAYER (DAL)
+#
+# =========================================================
+
+
+# =========================================================
+# 🔹 IMPORTS
+# =========================================================
 from app.db.database import SessionLocal
 from app.db.models import Application
 from datetime import datetime
+import os
 
 
-# =====================================================
-# 🔹 SAVE APPLICATION
-# =====================================================
-def save_application(data: dict):
+# =========================================================
+# 📂 DOSSIER STOCKAGE CV
+# =========================================================
+CV_FOLDER = "storage/cv"
+
+# création dossier si inexistant
+os.makedirs(CV_FOLDER, exist_ok=True)
+
+
+# =========================================================
+# 💾 SAVE CV
+# =========================================================
+def save_cv(filename: str, content: bytes):
     """
-    Sauvegarde en base SQLite (version robuste et propre)
-    """
+    🎯 Sauvegarde un CV sur disque
 
-    db = SessionLocal()
+    INPUT :
+    - filename : nom fichier
+    - content : contenu binaire
 
-    try:
-        # validation minimale
-        required_fields = ["job_id", "decision", "score"]
-
-        for field in required_fields:
-            if field not in data:
-                raise ValueError(f"Champ manquant : {field}")
-
-        # création objet
-        application = Application(
-            job_id=data["job_id"],
-            title=data.get("title"),
-            company=data.get("company"),
-            decision=data["decision"],
-            score=data["score"],
-            cover_letter=data.get("cover_letter"),
-            tailored_cv=data.get("tailored_cv"),
-            created_at=datetime.utcnow()
-        )
-
-        db.add(application)
-        db.commit()
-        db.refresh(application)
-
-        print(f"✅ Application sauvegardée (ID={application.id})")
-
-        return application.id
-
-    except Exception as e:
-        db.rollback()
-        print(f"❌ Erreur DB : {e}")
-        return None
-
-    finally:
-        db.close()
-
-
-# =====================================================
-# 🔹 GET APPLICATIONS (🔥 AJOUT IMPORTANT)
-# =====================================================
-def get_applications(
-    decision: str = None,
-    min_score: float = None,
-    limit: int = 50
-):
-    """
-    Récupère les candidatures avec filtres
+    OUTPUT :
+    - filename
     """
 
-    db = SessionLocal()
+    path = os.path.join(CV_FOLDER, filename)
 
-    try:
-        query = db.query(Application)
+    with open(path, "wb") as f:
+        f.write(content)
 
-        # filtre décision
-        if decision:
-            query = query.filter(Application.decision == decision)
+    return filename
 
-        # filtre score
-        if min_score is not None:
-            query = query.filter(Application.score >= min_score)
 
-        # tri
-        query = query.order_by(Application.score.desc())
+# =========================================================
+# 📂 LIST CV
+# =========================================================
+def list_cvs():
+    """
+    🎯 Liste les CV disponibles
+    """
 
-        # limite
-        query = query.limit(limit)
+    return os.listdir(CV_FOLDER)
 
-        applications = query.all()
 
-        # conversion dict
-        result = []
-        for app in applications:
-            result.append({
-                "id": app.id,
-                "job_id": app.job_id,
-                "title": app.title,
-                "company": app.company,
-                "decision": app.decision,
-                "score": app.score,
-                "created_at": app.created_at
-            })
+# =========================================================
+# ❌ DELETE CV
+# =========================================================
+def delete_cv(filename: str):
+    """
+    🎯 Supprime un CV
+    """
 
-        return result
+    path = os.path.join(CV_FOLDER, filename)
 
-    finally:
-        db.close()
+    if os.path.exists(path):
+        os.remove(path)
+
+
+# =========================================================
+# 📄 GET PATH CV 🔥 (CE QUI TE MANQUE)
+# =========================================================
+def get_cv_path(filename: str):
+    """
+    🎯 Retourne le chemin complet du CV
+
+    🧠 UTILISÉ PAR :
+    - agent
+    - apply
+    - extraction PDF
+
+    EX :
+    input  → cv1.pdf
+    output → storage/cv/cv1.pdf
+    """
+
+    return os.path.join(CV_FOLDER, filename)

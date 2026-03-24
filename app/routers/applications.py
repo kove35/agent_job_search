@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from app.agents.application_agent import build_application
-from app.services.storage import get_applications
+from app.services.application_storage import get_applications
 
 router = APIRouter()
 

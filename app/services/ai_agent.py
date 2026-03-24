@@ -1,45 +1,55 @@
 # ==========================================================
-# IMPORTS
+# 🧠 AI AGENT SERVICE (CORE IA)
+# ==========================================================
+# 🎯 RÔLE :
+# Centraliser TOUTES les interactions avec OpenAI
+#
+# 👉 Fournit :
+# - analyse CV
+# - analyse offre
+# - matching CV / job
+# - scoring avancé
+# - optimisation CV
+# - génération candidature
+#
+# 🔥 C’est le cerveau IA de ton application
+#
 # ==========================================================
 
-# json permet de transformer une chaîne JSON en dictionnaire Python
+
+# ==========================================================
+# 🔹 IMPORTS
+# ==========================================================
 import json
-
-# re permet de nettoyer du texte avec des expressions régulières
 import re
-
-# typing améliore la lisibilité des types
 from typing import Dict, Any
 
-# fitz = PyMuPDF pour lire le texte d'un PDF
-import fitz
-
-# SDK OpenAI
 from openai import OpenAI
-
-# Configuration centralisée du projet
 from app.core.config import settings
 
 
 # ==========================================================
-# CLIENT OPENAI
+# 🔹 CLIENT OPENAI (GLOBAL)
 # ==========================================================
+# 👉 IMPORTANT :
+# Un seul client pour toute l'application
+# évite bugs + optimise performances
 
-# On crée une seule fois le client OpenAI
-# Il utilisera la clé définie dans config.py
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 
 # ==========================================================
-# FONCTION BASSE-NIVEAU : APPEL GÉNÉRIQUE À L'IA
+# 🔹 LOW LEVEL CALL IA
 # ==========================================================
 def ask_ai(system_prompt: str, user_prompt: str, temperature: float | None = None) -> str:
     """
-    Envoie une consigne au modèle OpenAI et renvoie la réponse texte.
+    🔥 FONCTION CENTRALE
 
-    Rôle dans le flux :
-    Toutes les fonctions métier de ce fichier passent par cette fonction.
-    C'est le point central d'appel à l'IA.
+    👉 Envoie une requête à OpenAI
+    👉 Retourne du texte brut
+
+    UTILISATION :
+    toutes les fonctions passent par ici
     """
 
     response = client.chat.completions.create(
@@ -56,364 +66,301 @@ def ask_ai(system_prompt: str, user_prompt: str, temperature: float | None = Non
 
 
 # ==========================================================
-# FONCTION : CONVERTIR UNE RÉPONSE JSON TEXTE EN DICTIONNAIRE
+# 🔹 PARSE JSON ROBUSTE
 # ==========================================================
 def parse_json_response(text: str) -> Dict[str, Any]:
     """
-    Essaie de convertir une réponse texte du modèle en vrai JSON Python.
+    🔥 CRITIQUE
 
-    Si le modèle renvoie un JSON invalide,
-    on renvoie un dictionnaire d'erreur au lieu de faire planter le projet.
+    👉 GPT ne respecte pas toujours le JSON
+    👉 on nettoie + sécurise
+
+    Gère :
+    - ```json
+    - texte autour
+    - erreurs
     """
+
     try:
-        return json.loads(text)
-    except json.JSONDecodeError:
+        text = text.strip()
+
+        # enlever ```json
+        if text.startswith("```"):
+            parts = text.split("```")
+            text = parts[1] if len(parts) > 1 else text
+
+            if text.startswith("json"):
+                text = text[4:]
+
+        # extraction JSON via regex
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+
+        if not match:
+            return {
+                "error": "No JSON found",
+                "raw": text
+            }
+
+        return json.loads(match.group())
+
+    except Exception as e:
         return {
-            "error": "Réponse JSON invalide",
-            "raw_response": text
+            "error": "Parsing failed",
+            "raw": text,
+            "details": str(e)
         }
 
 
 # ==========================================================
-# FONCTION : APPEL IA QUI ATTEND DU JSON
+# 🔹 WRAPPER JSON
 # ==========================================================
 def ask_ai_json(system_prompt: str, user_prompt: str, temperature: float | None = None) -> Dict[str, Any]:
     """
-    Fonction pratique :
-    - appelle l'IA
-    - récupère le texte
-    - le convertit en dictionnaire JSON
+    🔥 VERSION SAFE
+
+    👉 appelle l'IA
+    👉 parse automatiquement le JSON
     """
-    raw_text = ask_ai(system_prompt, user_prompt, temperature=temperature)
-    return parse_json_response(raw_text)
+
+    raw = ask_ai(system_prompt, user_prompt, temperature)
+    return parse_json_response(raw)
 
 
 # ==========================================================
-# FONCTION : NETTOYAGE DU TEXTE CV
+# 🔹 CLEAN CV TEXT
 # ==========================================================
 def clean_cv_text(raw_text: str) -> str:
     """
-    Nettoie automatiquement un CV brut :
-    - supprime les caractères de contrôle
-    - normalise les retours à la ligne
-    - supprime les backslashes inutiles
-    - réduit les espaces multiples
+    Nettoie le texte brut d’un CV
 
-    Rôle dans le flux :
-    Cette étape doit être faite juste après l'extraction PDF
-    et avant l'analyse du CV.
+    👉 Évite bugs IA
+    👉 améliore compréhension
     """
 
     if not raw_text:
         return ""
 
-    # Supprimer les caractères de contrôle invisibles
+    # caractères invisibles
     cleaned = re.sub(r"[\x00-\x09\x0b-\x1f\x7f]", " ", raw_text)
 
-    # Remplacer les retours chariot Windows
+    # normalisation
     cleaned = cleaned.replace("\r", "\n")
-
-    # Supprimer les backslashes isolés
     cleaned = cleaned.replace("\\", "")
 
-    # Réduire les espaces multiples
+    # espaces multiples
     cleaned = re.sub(r"\s+", " ", cleaned)
 
     return cleaned.strip()
 
 
 # ==========================================================
-# FONCTION : EXTRACTION TEXTE PDF
-# ==========================================================
-def cv_to_json(pdf_bytes: bytes) -> Dict[str, Any]:
-    """
-    Lit un PDF reçu sous forme binaire et renvoie son texte.
-
-    Rôle dans le flux :
-    Sert à transformer un CV PDF en texte exploitable par l'IA.
-    """
-    try:
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        text = ""
-
-        for page in doc:
-            text += page.get_text()
-
-        return {"text": text}
-
-    except Exception as e:
-        return {"error": str(e)}
-
-
-# ==========================================================
-# FONCTION : ANALYSE D'OFFRE
+# 🔹 ANALYSE OFFRE
 # ==========================================================
 def analyze_offer(offer: Any) -> Dict[str, Any]:
     """
-    Analyse une offre d'emploi et renvoie une structure JSON.
+    Analyse une offre d'emploi
 
-    Rôle dans le flux :
-    Transforme une offre brute ou normalisée en besoin RH structuré.
-    Cela servira ensuite au matching.
+    👉 transforme texte brut → structure exploitable
+    👉 utilisé par :
+        job_search
+        matching
     """
 
-    system_prompt = "Tu es un expert en analyse RH et recrutement."
+    system_prompt = "Tu es un expert en analyse RH."
 
     user_prompt = f"""
-Tu es un expert en analyse d'offres d'emploi.
-Analyse l'offre suivante et renvoie un JSON STRICTEMENT brut.
+Analyse cette offre :
 
-OFFRE :
 Titre : {getattr(offer, 'title', '')}
 Description : {getattr(offer, 'description', '')}
-Lieu : {getattr(offer, 'location', '')}
 
-Réponds au format JSON suivant :
+FORMAT STRICT :
 
 {{
-  "resume": "Résumé clair en 3-4 lignes",
-  "hard_skills": ["compétences techniques"],
-  "soft_skills": ["compétences comportementales"],
-  "responsibilities": ["responsabilité 1", "responsabilité 2"],
-  "experience_level": "Junior / Intermédiaire / Senior",
-  "estimated_years_experience": "Nombre d'années estimé",
-  "keywords": ["mots clés ATS"],
-  "implicit_technologies": ["technos déduites même si non mentionnées"],
-  "matching_score": 0,
-  "recommendations": ["conseil 1", "conseil 2", "conseil 3"]
+  "analysis": {{
+    "resume": "",
+    "hard_skills": [],
+    "soft_skills": [],
+    "experience_level": "",
+    "keywords": []
+  }}
 }}
-
-Règles importantes :
-- Renvoie UNIQUEMENT du JSON brut
-- Ne laisse jamais une liste vide
-- Pas de texte avant ou après
 """
 
     return ask_ai_json(system_prompt, user_prompt, temperature=0.2)
 
 
 # ==========================================================
-# FONCTION : ANALYSE DE CV
+# 🔹 ANALYSE CV
 # ==========================================================
 def analyze_cv(cv_text: str) -> Dict[str, Any]:
     """
-    Analyse un CV texte et renvoie une structure JSON.
+    Analyse un CV
 
-    Rôle dans le flux :
-    Transforme le CV en profil candidat structuré.
+    👉 CV → profil structuré
     """
-    system_prompt = "Tu es un expert en analyse de CV techniques."
+
+    system_prompt = "Tu es un expert en analyse de CV."
 
     user_prompt = f"""
-Tu es un expert en analyse de CV techniques (production, supervision, data, industrie).
-Analyse le CV suivant et renvoie un JSON STRICTEMENT brut.
+Analyse ce CV :
 
 CV :
 {cv_text}
 
-Réponds au format JSON suivant :
+FORMAT STRICT :
 
 {{
-  "resume": "Résumé clair du profil en 3-4 lignes",
-  "hard_skills": ["compétences techniques"],
-  "soft_skills": ["compétences comportementales"],
-  "responsibilities": ["responsabilité 1", "responsabilité 2"],
-  "experience_level": "Junior / Intermédiaire / Senior",
-  "estimated_years_experience": "Nombre d'années estimé",
-  "keywords": ["mots clés ATS"],
-  "implicit_technologies": ["technos déduites même si non mentionnées"],
-  "recommendations": ["conseil 1", "conseil 2", "conseil 3"]
+  "analysis": {{
+    "resume": "",
+    "hard_skills": [],
+    "soft_skills": [],
+    "experience_level": "",
+    "keywords": []
+  }}
 }}
-
-Règles importantes :
-- Renvoie UNIQUEMENT du JSON brut
-- Ne laisse jamais une liste vide
-- Pas de texte avant ou après
 """
 
     return ask_ai_json(system_prompt, user_prompt, temperature=0.2)
 
 
 # ==========================================================
-# FONCTION : MATCHING CV / OFFRE
+# 🔹 MATCHING CV / OFFRE
 # ==========================================================
 def match_cv_offer(cv_analysis: Dict[str, Any], offer_analysis: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Compare l'analyse du CV et l'analyse de l'offre.
+    Compare CV vs Offre
 
-    Rôle dans le flux :
-    C'est ici qu'on décide si le candidat doit postuler ou non.
+    👉 produit un score + insights
     """
-    system_prompt = "Tu es un expert en matching RH et analyse de compatibilité."
+
+    system_prompt = "Tu es expert matching RH."
 
     user_prompt = f"""
-Tu es un expert en matching RH.
-Compare l'analyse du CV et l'analyse de l'offre ci-dessous.
+Compare :
 
 CV :
-{json.dumps(cv_analysis, ensure_ascii=False)}
+{json.dumps(cv_analysis)}
 
 OFFRE :
-{json.dumps(offer_analysis, ensure_ascii=False)}
+{json.dumps(offer_analysis)}
 
-Renvoie un JSON STRICTEMENT brut au format suivant :
+FORMAT :
 
 {{
-  "matching_score": 0,
-  "missing_skills": ["compétence manquante 1", "compétence manquante 2"],
-  "strengths": ["point fort 1", "point fort 2"],
-  "summary": "Résumé clair du matching en 3-4 lignes"
+  "match": {{
+    "matching_score": 0,
+    "missing_skills": [],
+    "strengths": [],
+    "summary": ""
+  }}
 }}
-
-Règles :
-- Renvoie uniquement du JSON brut
-- Pas de texte avant ou après
 """
 
-    return ask_ai_json(system_prompt, user_prompt, temperature=0.2)
+    return ask_ai_json(system_prompt, user_prompt)
 
 
 # ==========================================================
-# FONCTION : SCORING AVANCÉ
+# 🔹 SCORING AVANCÉ
 # ==========================================================
 def score_analysis(cv_analysis: Dict[str, Any], offer_analysis: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Génère un score détaillé entre CV et offre.
+    Score détaillé
 
-    Rôle dans le flux :
-    Produit un score exploitable dans le dashboard
-    et pour la décision automatique.
+    👉 utile pour dashboard
     """
-    system_prompt = "Tu es un expert en scoring RH."
+
+    system_prompt = "Tu es expert scoring RH."
 
     user_prompt = f"""
-Tu es un expert en scoring RH.
-Compare ces deux analyses et génère un score détaillé.
+Compare :
 
 CV :
-{json.dumps(cv_analysis, ensure_ascii=False)}
+{json.dumps(cv_analysis)}
 
 OFFRE :
-{json.dumps(offer_analysis, ensure_ascii=False)}
+{json.dumps(offer_analysis)}
 
-Renvoie un JSON STRICTEMENT brut :
-
-{{
-  "global_score": 0,
-  "technical_score": 0,
-  "soft_skills_score": 0,
-  "experience_score": 0,
-  "keywords_match": ["mot1", "mot2"],
-  "missing_keywords": ["mot1", "mot2"],
-  "summary": "Résumé clair"
-}}
-
-Règles :
-- Renvoie uniquement du JSON brut
-- Pas de texte avant ou après
-"""
-
-    return ask_ai_json(system_prompt, user_prompt, temperature=0.2)
-
-
-# ==========================================================
-# FONCTION : OPTIMISATION DE CV POUR UNE OFFRE
-# ==========================================================
-def optimize_cv_for_offer(
-    cv_analysis: Dict[str, Any],
-    offer_analysis: Dict[str, Any],
-    match_result: Dict[str, Any]
-) -> Dict[str, Any]:
-    """
-    Génère une version optimisée du CV pour mieux coller à l'offre.
-
-    Rôle dans le flux :
-    Sert à produire une candidature plus ciblée.
-    """
-    system_prompt = "Tu es un expert en optimisation de CV et matching RH."
-
-    user_prompt = f"""
-Tu es un expert en optimisation de CV pour augmenter le matching avec une offre d'emploi.
-
-Voici l'analyse du CV :
-{json.dumps(cv_analysis, ensure_ascii=False)}
-
-Voici l'analyse de l'offre :
-{json.dumps(offer_analysis, ensure_ascii=False)}
-
-Voici le résultat du matching :
-{json.dumps(match_result, ensure_ascii=False)}
-
-Ta mission :
-- Générer une version optimisée du CV du candidat
-- Mettre en avant les compétences pertinentes pour l'offre
-- Ajouter les compétences manquantes si elles sont cohérentes
-- Renforcer les points forts
-- Reformuler les expériences pour coller à l'offre
-
-Renvoie un JSON STRICTEMENT brut au format suivant :
+FORMAT :
 
 {{
-  "optimized_title": "Titre optimisé du CV",
-  "optimized_summary": "Résumé professionnel optimisé",
-  "optimized_hard_skills": ["compétence 1", "compétence 2"],
-  "optimized_soft_skills": ["compétence 1", "compétence 2"],
-  "optimized_experience": {{
-      "experience_1": "Texte optimisé",
-      "experience_2": "Texte optimisé"
-  }},
-  "recommendations": ["conseil 1", "conseil 2"]
+  "score": {{
+    "global_score": 0,
+    "technical_score": 0,
+    "experience_score": 0,
+    "summary": ""
+  }}
 }}
-
-Règles :
-- Renvoie uniquement du JSON brut
-- Pas de texte avant ou après
 """
 
-    return ask_ai_json(system_prompt, user_prompt, temperature=0.2)
+    return ask_ai_json(system_prompt, user_prompt)
 
 
 # ==========================================================
-# FONCTION : PIPELINE COMPLET AUTO_APPLY
+# 🔹 OPTIMISATION CV
 # ==========================================================
-def auto_apply(cv_text: str, offer: Dict[str, Any]) -> Dict[str, Any]:
+def optimize_cv_for_offer(cv_analysis, offer_analysis, match_result):
     """
-    Demande au modèle de faire tout le travail d'un seul coup.
+    Génère un CV optimisé
 
-    Rôle dans le flux :
-    Fonction pratique pour prototyper rapidement,
-    mais moins contrôlable que le pipeline étape par étape.
+    👉 améliore matching ATS
     """
-    system_prompt = "Tu es un assistant RH autonome spécialisé en optimisation de candidatures."
+
+    system_prompt = "Tu es expert optimisation CV."
 
     user_prompt = f"""
-Tu es un assistant RH autonome. À partir du CV et de l'offre, génère :
+Optimise ce CV :
 
-1. Analyse du CV
-2. Analyse de l'offre
-3. Matching
-4. CV optimisé
-5. Lettre de motivation optimisée
+CV :
+{json.dumps(cv_analysis)}
 
+OFFRE :
+{json.dumps(offer_analysis)}
+
+MATCH :
+{json.dumps(match_result)}
+
+FORMAT :
+
+{{
+  "optimized_cv": {{
+    "summary": "",
+    "skills": [],
+    "experience": []
+  }}
+}}
+"""
+
+    return ask_ai_json(system_prompt, user_prompt)
+
+
+# ==========================================================
+# 🔹 AUTO APPLY (FULL PIPELINE IA)
+# ==========================================================
+def auto_apply(cv_text: str, offer: Dict[str, Any]):
+    """
+    🔥 MODE FULL AUTOMATIQUE
+
+    👉 génère directement :
+    - lettre de motivation
+    """
+
+    system_prompt = "Tu es assistant RH autonome."
+
+    user_prompt = f"""
 CV :
 {cv_text}
 
 OFFRE :
-{json.dumps(offer, ensure_ascii=False)}
+{json.dumps(offer)}
 
-Renvoie un JSON STRICTEMENT brut :
+FORMAT :
 
 {{
-  "cv_analysis": {{...}},
-  "offer_analysis": {{...}},
-  "match": {{...}},
-  "optimized_cv": {{...}},
-  "cover_letter": "texte"
+  "auto_apply": {{
+    "cover_letter": ""
+  }}
 }}
-
-Règles :
-- Renvoie uniquement du JSON brut
-- Pas de texte avant ou après
 """
 
     return ask_ai_json(system_prompt, user_prompt, temperature=0.3)

@@ -1,17 +1,16 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# 🔹 fichier SQLite (créé automatiquement)
 DATABASE_URL = "sqlite:///./jobs.db"
 
-# 🔹 moteur de connexion
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False}  # obligatoire pour SQLite
+    connect_args={"check_same_thread": False}
 )
 
-# 🔹 session = connexion à la DB
 SessionLocal = sessionmaker(bind=engine)
 
-# 🔹 base pour créer les tables
+# ✅ LA SEULE BASE DU PROJET
 Base = declarative_base()
+import os
+print("📍 DB ABSOLUE :", os.path.abspath("jobs.db"))

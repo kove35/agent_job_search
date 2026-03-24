@@ -1,0 +1,14 @@
+# Environnement
+.venv/
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Data
+job_offers.json
+application_packs.json
+
+# Streamlit
+.streamlit/secrets.toml
