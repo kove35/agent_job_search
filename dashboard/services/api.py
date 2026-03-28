@@ -170,3 +170,49 @@ def delete_cv(filename):
 
     except Exception as e:
         return {"error": str(e)}
+
+
+# dashboard/services/api.py
+
+def optimize_cv(
+    cv_name: str,
+    job_title: str,
+    job_description: str,
+    missing_skills: List[str] = None,
+    strengths: List[str] = None
+) -> dict:
+    """
+    Optimise un CV pour une offre d'emploi.
+    
+    Args:
+        cv_name: Nom du CV à optimiser
+        job_title: Titre du poste
+        job_description: Description de l'offre
+        missing_skills: Compétences manquantes
+        strengths: Points forts du candidat
+    
+    Returns:
+        Dict avec le CV optimisé
+    """
+    try:
+        payload = {
+            "cv_name": cv_name,
+            "job_title": job_title,
+            "job_description": job_description,
+            "missing_skills": missing_skills or [],
+            "strengths": strengths or []
+        }
+        
+        response = requests.post(
+            f"{API_BASE_URL}/cv/optimize",
+            json=payload,
+            timeout=60
+        )
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return {"success": False, "error": response.text}
+            
+    except Exception as e:
+        return {"success": False, "error": str(e)}

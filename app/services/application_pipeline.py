@@ -27,7 +27,7 @@
 import json
 
 # 📦 DB
-from app.services.application_storage import get_applications, save_application
+from app.services.storage.application_storage import get_applications, save_application
 
 # 🤖 IA
 from app.services.application_builder import build_application_pack
